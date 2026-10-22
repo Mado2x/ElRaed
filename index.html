@@ -194,7 +194,7 @@
       <div class="flex justify-between items-center">
         <h2 class="text-base font-bold text-white">كشوف حسابات الموردين</h2>
         <button onclick="openAddSupplierTransactionModal()" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold">
-          + تسجيل توريد من مورد
+          + تسجيل توريدة من مورد
         </button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="suppliersCardsContainer"></div>
@@ -252,11 +252,55 @@
     </div>
   </div>
 
-  <!-- المحرك البرمجي المدمج بالكامل داخل الصفحة -->
+  <!-- Modal: تسجيل توريدة خاصة بالمورد وأصنافه المحددة -->
+  <div id="supplierModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-5 space-y-3.5">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
+        <h3 class="text-sm font-bold text-white">تسجيل توريدة بضاعة من مورد</h3>
+        <button onclick="closeModal('supplierModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="space-y-2.5 text-xs">
+        <div>
+          <label class="block text-slate-300 mb-1">المورد *</label>
+          <select id="supSelect" onchange="updateSupplierItemsDropdown()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white font-bold"></select>
+        </div>
+        <div>
+          <label class="block text-slate-300 mb-1">الصنف المورد *</label>
+          <select id="supItemSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-amber-400 font-bold"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-300 mb-1">الكمية المستلمة *</label>
+            <input type="number" id="supItemQty" value="1" min="1" oninput="calcSupplierBillTotal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white text-center font-bold">
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">سعر الوحدة (ج.م) *</label>
+            <input type="number" id="supItemUnitPrice" placeholder="0" oninput="calcSupplierBillTotal()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-emerald-400 font-bold">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-300 mb-1">إجمالي الفاتورة (ج.م)</label>
+            <input type="number" id="supBillTotal" placeholder="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-amber-400 font-bold">
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">المدفوع له كاش الآن (ج.م)</label>
+            <input type="number" id="supPaidNow" value="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-emerald-400 font-bold">
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2 border-t border-slate-800">
+        <button onclick="saveSupplierTransaction()" class="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs">اعتماد التوريدة وإضافتها للمخزن</button>
+        <button onclick="closeModal('supplierModal')" class="px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- المحرك البرمجي المدمج -->
   <script>
     const KEY_AUTH = 'raed_auth_status_v1';
     const KEY_OPERATIONS = 'raed_operations_data_v1';
-    const KEY_SUPPLIERS = 'raed_suppliers_data_v1';
+    const KEY_SUPPLIERS = 'raed_suppliers_data_v2';
     const KEY_INVENTORY = 'raed_inventory_data_v1';
 
     const RAED_SITES = [
@@ -271,15 +315,72 @@
       "طوب 24", "طوب آلي", "طوب دوبل"
     ];
 
+    // تحديد الموردين والأصناف المستوردة من كل مورد
     const RAED_DEFAULT_SUPPLIERS = [
-      { id: 'SUP-1', name: 'الشيخ فوزي', item: 'أسمنت', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-2', name: 'تشوينة ناصر', item: 'تشوينات ومواد', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-3', name: 'الشيخ عاطف', item: 'أسمنت وجبس', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-4', name: 'محمود حميدة', item: 'رمل وسن', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-5', name: 'أحمد حنفي', item: 'أسمنت', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-6', name: 'صبري طوب', item: 'طوب أحمر وآلي', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-7', name: 'سليمان مورد', item: 'رمل', totalWork: 0, totalPaid: 0 },
-      { id: 'SUP-8', name: 'مورد السن', item: 'سن بأنواعه', totalWork: 0, totalPaid: 0 }
+      { 
+        id: 'SUP-1', 
+        name: 'الشيخ فوزي', 
+        itemsAllowed: ['أسمنت طرة', 'أسمنت سيناء', 'أسمنت أبيض', 'جبس سيناء', 'جبس قومية'],
+        itemDesc: 'أسمنت طرة، سيناء، أبيض، وجبس', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-2', 
+        name: 'تشوينة ناصر', 
+        itemsAllowed: ['أسمنت سيناء', 'أسمنت طرة', 'رمل', 'طوب أحمر'],
+        itemDesc: 'تشوينات وخامات', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-3', 
+        name: 'الشيخ عاطف', 
+        itemsAllowed: ['أسمنت واحة', 'جبس قومية', 'جبس سيناء'],
+        itemDesc: 'أسمنت واحة وجبس', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-4', 
+        name: 'محمود حميدة', 
+        itemsAllowed: ['رمل', 'سن'],
+        itemDesc: 'رمل وسن', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-5', 
+        name: 'أحمد حنفي', 
+        itemsAllowed: ['أسمنت سيناء', 'أسمنت طرة'],
+        itemDesc: 'أسمنت', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-6', 
+        name: 'صبري طوب', 
+        itemsAllowed: ['طوب أحمر', 'طوب 24', 'طوب آلي', 'طوب دوبل'],
+        itemDesc: 'طوب بأنواعه', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-7', 
+        name: 'سليمان مورد', 
+        itemsAllowed: ['رمل'],
+        itemDesc: 'رمل', 
+        totalWork: 0, 
+        totalPaid: 0 
+      },
+      { 
+        id: 'SUP-8', 
+        name: 'مورد السن', 
+        itemsAllowed: ['سن'],
+        itemDesc: 'سن', 
+        totalWork: 0, 
+        totalPaid: 0 
+      }
     ];
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -319,9 +420,22 @@
     }
 
     function initDefaults() {
-      if (!localStorage.getItem(KEY_SUPPLIERS)) {
+      // نتحقق من وجود الموردين وتحديث قائمة الشيخ فوزي
+      const stored = localStorage.getItem(KEY_SUPPLIERS);
+      if (!stored) {
         localStorage.setItem(KEY_SUPPLIERS, JSON.stringify(RAED_DEFAULT_SUPPLIERS));
+      } else {
+        try {
+          const list = JSON.parse(stored);
+          const fawzy = list.find(s => s.name === 'الشيخ فوزي');
+          if (fawzy) {
+            fawzy.itemsAllowed = ['أسمنت طرة', 'أسمنت سيناء', 'أسمنت أبيض', 'جبس سيناء', 'جبس قومية'];
+            fawzy.itemDesc = 'أسمنت طرة، سيناء، أبيض، وجبس';
+            localStorage.setItem(KEY_SUPPLIERS, JSON.stringify(list));
+          }
+        } catch(e) {}
       }
+
       if (!localStorage.getItem(KEY_INVENTORY)) {
         const defaultInv = {};
         RAED_ITEMS.forEach(it => defaultInv[it] = 0);
@@ -345,7 +459,6 @@
       }
     }
 
-    // دالة التبديل بين الأقسام
     function switchView(viewId) {
       const sections = ['dashboard', 'sites', 'suppliers', 'inventory'];
       sections.forEach(v => {
@@ -504,7 +617,8 @@
     }
 
     function closeModal(id) {
-      document.getElementById(id).classList.add('hidden');
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
     }
 
     function saveOperation() {
@@ -557,6 +671,7 @@
       }
     }
 
+    // =================== كشوف وتوريدات الموردين ===================
     function renderSuppliersView() {
       const container = document.getElementById('suppliersCardsContainer');
       if (!container) return;
@@ -569,7 +684,7 @@
             <div class="flex justify-between items-start">
               <div>
                 <h3 class="text-sm font-black text-white">${sup.name}</h3>
-                <span class="text-[11px] text-amber-400">${sup.item}</span>
+                <span class="text-[11px] text-amber-400 block mt-0.5">${sup.itemDesc || sup.item || 'مواد بناء'}</span>
               </div>
               <span class="text-xs px-2 py-0.5 rounded-lg font-bold ${remaining > 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}">
                 ${remaining > 0 ? `متبقي له: ${remaining.toLocaleString()} ج` : 'حسابه خالص ✔'}
@@ -582,7 +697,7 @@
             </div>
 
             <div class="flex gap-2 pt-2 border-t border-slate-800">
-              <button onclick="recordSupplierBill(${idx})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition">+ توريدة</button>
+              <button onclick="openSpecificSupplierModal(${idx})" class="flex-1 py-1.5 bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/30 text-xs font-bold rounded-xl transition">+ توريدة بضاعة</button>
               <button onclick="paySupplier(${idx})" class="flex-1 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 text-xs font-bold rounded-xl transition">سداد دفعة</button>
             </div>
           </div>
@@ -590,14 +705,78 @@
       }).join('');
     }
 
-    function recordSupplierBill(idx) {
+    function openAddSupplierTransactionModal() {
+      openSpecificSupplierModal(0);
+    }
+
+    function openSpecificSupplierModal(defaultIdx = 0) {
       const suppliers = getSuppliers();
-      const amt = prompt(`أدخل قيمة التوريدة الجديدة من المورد (${suppliers[idx].name}):`);
-      if (amt && !isNaN(amt) && parseFloat(amt) > 0) {
-        suppliers[idx].totalWork = (suppliers[idx].totalWork || 0) + parseFloat(amt);
-        saveSuppliers(suppliers);
-        refreshAllData();
+      const supSelect = document.getElementById('supSelect');
+      if (supSelect) {
+        supSelect.innerHTML = suppliers.map((s, i) => `<option value="${i}" ${i === defaultIdx ? 'selected' : ''}>${s.name}</option>`).join('');
       }
+      updateSupplierItemsDropdown();
+      document.getElementById('supItemQty').value = 1;
+      document.getElementById('supItemUnitPrice').value = '';
+      document.getElementById('supBillTotal').value = '';
+      document.getElementById('supPaidNow').value = 0;
+      document.getElementById('supplierModal').classList.remove('hidden');
+    }
+
+    function updateSupplierItemsDropdown() {
+      const suppliers = getSuppliers();
+      const supIdx = document.getElementById('supSelect').value;
+      const currentSup = suppliers[supIdx];
+      const itemSelect = document.getElementById('supItemSelect');
+      if (!itemSelect || !currentSup) return;
+
+      const allowed = currentSup.itemsAllowed || RAED_ITEMS;
+      itemSelect.innerHTML = allowed.map(it => `<option value="${it}">${it}</option>`).join('');
+      calcSupplierBillTotal();
+    }
+
+    function calcSupplierBillTotal() {
+      const qty = parseFloat(document.getElementById('supItemQty').value) || 0;
+      const unitPrice = parseFloat(document.getElementById('supItemUnitPrice').value) || 0;
+      const totalInput = document.getElementById('supBillTotal');
+      if (totalInput && unitPrice > 0) {
+        totalInput.value = Math.round(qty * unitPrice);
+      }
+    }
+
+    function saveSupplierTransaction() {
+      const suppliers = getSuppliers();
+      const supIdx = document.getElementById('supSelect').value;
+      const sup = suppliers[supIdx];
+      const itemName = document.getElementById('supItemSelect').value;
+      const qty = parseInt(document.getElementById('supItemQty').value) || 1;
+      const billTotal = parseFloat(document.getElementById('supBillTotal').value) || 0;
+      const paidNow = parseFloat(document.getElementById('supPaidNow').value) || 0;
+
+      if (billTotal <= 0) {
+        alert('يرجى إدخال سعر الوحدة أو إجمالي الفاتورة!');
+        return;
+      }
+
+      // زيادة حساب المورد والمسدد له
+      sup.totalWork = (sup.totalWork || 0) + billTotal;
+      sup.totalPaid = (sup.totalPaid || 0) + paidNow;
+      saveSuppliers(suppliers);
+
+      // زيادة رصيد الصنف المستورد في مخزن التشوينة مباشرة
+      const inv = getInventory();
+      inv[itemName] = (inv[itemName] || 0) + qty;
+      saveInventory(inv);
+
+      closeModal('supplierModal');
+      refreshAllData();
+      Swal.fire({
+        icon: 'success',
+        title: `تم استلام ${qty} من (${itemName}) من (${sup.name})`,
+        text: `تمت إضافة الكمية لمخزن التشوينة وزيادة حساب المورد بمبلغ ${billTotal.toLocaleString()} ج.م`,
+        timer: 2000,
+        showConfirmButton: false
+      });
     }
 
     function paySupplier(idx) {
@@ -610,38 +789,7 @@
       }
     }
 
-    function openAddSupplierTransactionModal() {
-      const suppliers = getSuppliers();
-      const supOptions = suppliers.map((s, i) => `<option value="${i}">${s.name} (${s.item})</option>`).join('');
-
-      Swal.fire({
-        title: 'تسجيل توريدة من مورد',
-        html: `
-          <select id="swal-sup-idx" class="swal2-input">${supOptions}</select>
-          <input id="swal-sup-amount" type="number" class="swal2-input" placeholder="قيمة التوريدة (ج.م)">
-          <input id="swal-sup-paid" type="number" class="swal2-input" placeholder="المدفوع كاش له فوراً (ج.م)">
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'تسجيل',
-        cancelButtonText: 'إلغاء',
-        preConfirm: () => {
-          const idx = document.getElementById('swal-sup-idx').value;
-          const amt = parseFloat(document.getElementById('swal-sup-amount').value) || 0;
-          const paid = parseFloat(document.getElementById('swal-sup-paid').value) || 0;
-          if (amt <= 0) Swal.showValidationMessage('يرجى إدخال قيمة التوريدة');
-          return { idx, amt, paid };
-        }
-      }).then(res => {
-        if (res.isConfirmed) {
-          suppliers[res.value.idx].totalWork = (suppliers[res.value.idx].totalWork || 0) + res.value.amt;
-          suppliers[res.value.idx].totalPaid = (suppliers[res.value.idx].totalPaid || 0) + res.value.paid;
-          saveSuppliers(suppliers);
-          refreshAllData();
-          Swal.fire({ icon: 'success', title: 'تم تسجيل التوريدة بنجاح', timer: 1200, showConfirmButton: false });
-        }
-      });
-    }
-
+    // =================== جرد التشوينة ===================
     function renderInventoryView() {
       const container = document.getElementById('inventoryCardsContainer');
       if (!container) return;
@@ -675,6 +823,7 @@
       }
     }
 
+    // =================== تصدير شيت الرائد ===================
     function exportRaedExcel() {
       const operations = getOperations();
       const suppliers = getSuppliers();
@@ -693,8 +842,8 @@
 
       const supData = suppliers.map(s => ({
         "اسم المورد": s.name,
-        "الصنف المورد": s.item,
-        "إجمالي الشغل والتوريد": s.totalWork,
+        "الأصناف الموردة": s.itemDesc || s.item,
+        "إجمالي التوريدات": s.totalWork,
         "المسدد له": s.totalPaid,
         "المتبقي له (دين)": Math.max(0, s.totalWork - s.totalPaid)
       }));
