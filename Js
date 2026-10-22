@@ -7,7 +7,6 @@ const KEY_OPERATIONS = 'raed_operations_data_v1';
 const KEY_SUPPLIERS = 'raed_suppliers_data_v1';
 const KEY_INVENTORY = 'raed_inventory_data_v1';
 
-// قائمة المواقع والمشاريع المعتمدة في شيت الإكسيل
 const RAED_SITES = [
   "باتيو كازا",
   "المعادي فيو",
@@ -23,7 +22,6 @@ const RAED_SITES = [
   "المعادي 2"
 ];
 
-// قائمة أصناف التشوينة ومواد البناء الأساسية
 const RAED_ITEMS = [
   "رمل",
   "سن",
@@ -39,7 +37,6 @@ const RAED_ITEMS = [
   "طوب دوبل"
 ];
 
-// قائمة الموردين المعتمدة في الشيت
 const RAED_DEFAULT_SUPPLIERS = [
   { id: 'SUP-1', name: 'الشيخ فوزي', item: 'أسمنت', totalWork: 0, totalPaid: 0 },
   { id: 'SUP-2', name: 'تشوينة ناصر', item: 'تشوينات ومواد', totalWork: 0, totalPaid: 0 },
@@ -51,7 +48,7 @@ const RAED_DEFAULT_SUPPLIERS = [
   { id: 'SUP-8', name: 'مورد السن', item: 'سن بأنواعه', totalWork: 0, totalPaid: 0 }
 ];
 
-// =================== بدء التشغيل ===================
+// بدء التشغيل
 window.addEventListener('DOMContentLoaded', () => {
   checkLogin();
   initDefaults();
@@ -65,19 +62,6 @@ function checkLogin() {
   if (overlay) overlay.style.display = (isAuth === 'true') ? 'none' : 'flex';
 }
 
-function handleLogin() {
-  const user = document.getElementById('loginUser').value.trim().toLowerCase();
-  const pass = document.getElementById('loginPass').value.trim();
-
-  if ((user === 'admin' || user === '') && (pass === '1234' || pass === '0000')) {
-    localStorage.setItem(KEY_AUTH, 'true');
-    checkLogin();
-    Swal.fire({ icon: 'success', title: 'مرحباً بك في شركة الرائد', timer: 1200, showConfirmButton: false });
-  } else {
-    Swal.fire({ icon: 'error', title: 'خطأ', text: 'اسم المستخدم أو كلمة المرور غير صحيحة!' });
-  }
-}
-
 function handleLogout() {
   if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
     localStorage.removeItem(KEY_AUTH);
@@ -85,7 +69,6 @@ function handleLogout() {
   }
 }
 
-// تهيئة البيانات الافتراضية إذا كان السيستم يفتح لأول مرة
 function initDefaults() {
   if (!localStorage.getItem(KEY_SUPPLIERS)) {
     localStorage.setItem(KEY_SUPPLIERS, JSON.stringify(RAED_DEFAULT_SUPPLIERS));
@@ -113,7 +96,6 @@ function populateDropdowns() {
   }
 }
 
-// تبديل الشاشات
 function switchView(viewId) {
   ['dashboard', 'sites', 'suppliers', 'inventory'].forEach(v => {
     const sec = document.getElementById(`view-${v}`);
@@ -131,7 +113,6 @@ function switchView(viewId) {
   refreshAllData();
 }
 
-// =================== جلب وحفظ البيانات ===================
 function getOperations() {
   return JSON.parse(localStorage.getItem(KEY_OPERATIONS) || '[]');
 }
@@ -153,18 +134,15 @@ function saveInventory(data) {
   localStorage.setItem(KEY_INVENTORY, JSON.stringify(data));
 }
 
-// =================== الحسابات المركزية والتحديث ===================
 function refreshAllData() {
   const operations = getOperations();
   const suppliers = getSuppliers();
-  const inventory = getInventory();
 
   let totalWork = 0;
   let totalTashween = 0;
   let totalWorkers = 0;
   let totalCollected = 0;
 
-  // خريطة إجماليات كل موقع
   const siteSummaryMap = {};
   RAED_SITES.forEach(s => {
     siteSummaryMap[s] = { work: 0, tashween: 0, workers: 0, collected: 0, count: 0 };
@@ -190,22 +168,24 @@ function refreshAllData() {
     }
   });
 
-  // معادلة الشيت: إجمالي المطلوب = (الشغل + التشوين) - المحصل
   const totalRemainingOutside = (totalWork + totalTashween) - totalCollected;
 
-  // إجمالي ديون الموردين
   let totalSuppliersDebt = 0;
   suppliers.forEach(s => totalSuppliersDebt += Math.max(0, (s.totalWork || 0) - (s.totalPaid || 0)));
 
-  // تحديث كروت الرئيسية
-  document.getElementById('dashTotalWork').innerText = `${totalWork.toLocaleString()} ج.م`;
-  document.getElementById('dashTotalTashween').innerText = `${totalTashween.toLocaleString()} ج.م`;
-  document.getElementById('dashTotalCollected').innerText = `${totalCollected.toLocaleString()} ج.م`;
-  document.getElementById('dashTotalRemainingOutside').innerText = `${totalRemainingOutside.toLocaleString()} ج.م`;
-  document.getElementById('dashSuppliersTotalRemaining').innerText = `${totalSuppliersDebt.toLocaleString()} ج.م`;
-  document.getElementById('dashTotalWorkers').innerText = `${totalWorkers.toLocaleString()} ج.م`;
+  const elWork = document.getElementById('dashTotalWork');
+  if (elWork) elWork.innerText = `${totalWork.toLocaleString()} ج.م`;
+  const elTash = document.getElementById('dashTotalTashween');
+  if (elTash) elTash.innerText = `${totalTashween.toLocaleString()} ج.م`;
+  const elCol = document.getElementById('dashTotalCollected');
+  if (elCol) elCol.innerText = `${totalCollected.toLocaleString()} ج.م`;
+  const elRem = document.getElementById('dashTotalRemainingOutside');
+  if (elRem) elRem.innerText = `${totalRemainingOutside.toLocaleString()} ج.م`;
+  const elSup = document.getElementById('dashSuppliersTotalRemaining');
+  if (elSup) elSup.innerText = `${totalSuppliersDebt.toLocaleString()} ج.م`;
+  const elWorkers = document.getElementById('dashTotalWorkers');
+  if (elWorkers) elWorkers.innerText = `${totalWorkers.toLocaleString()} ج.م`;
 
-  // جدول ملخص المواقع في الرئيسية
   const dashSitesTbody = document.getElementById('dashboardSitesSummaryBody');
   if (dashSitesTbody) {
     dashSitesTbody.innerHTML = RAED_SITES.map(site => {
@@ -229,7 +209,6 @@ function refreshAllData() {
   renderInventoryView();
 }
 
-// =================== جدول العمليات والمواقع ===================
 function renderSitesTable() {
   const operations = getOperations();
   const filter = document.getElementById('filterSiteSelect')?.value || 'all';
@@ -307,7 +286,6 @@ function saveOperation() {
 
   saveOperations(operations);
 
-  // خصم الكمية من رصيد التشوينة بالمخزن
   const inv = getInventory();
   if (inv[itemName] !== undefined) {
     inv[itemName] = Math.max(0, inv[itemName] - qty);
@@ -328,7 +306,6 @@ function deleteOperation(idx) {
   }
 }
 
-// =================== كروت الموردين ===================
 function renderSuppliersView() {
   const container = document.getElementById('suppliersCardsContainer');
   if (!container) return;
@@ -414,7 +391,6 @@ function openAddSupplierTransactionModal() {
   });
 }
 
-// =================== جرد التشوينة والمخزن ===================
 function renderInventoryView() {
   const container = document.getElementById('inventoryCardsContainer');
   if (!container) return;
@@ -448,12 +424,10 @@ function updateStock(item) {
   }
 }
 
-// =================== تصدير إكسيل متطابق مع شيت الرائد ===================
 function exportRaedExcel() {
   const operations = getOperations();
   const suppliers = getSuppliers();
 
-  // الشيت 1: حركة المواقع والتشوينات
   const opsData = operations.map(o => ({
     "التاريخ": o.date,
     "الموقع / المشروع": o.siteName,
@@ -466,7 +440,6 @@ function exportRaedExcel() {
     "المتبقي خارجاً": (o.workTotal + o.tashweenTotal) - o.collected
   }));
 
-  // الشيت 2: كشوف حسابات الموردين
   const supData = suppliers.map(s => ({
     "اسم المورد": s.name,
     "الصنف المورد": s.item,
