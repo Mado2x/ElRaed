@@ -1,0 +1,487 @@
+// ==========================================
+// محرك شركة الرائد لتشوينات وتوريدات مواد البناء
+// ==========================================
+
+const KEY_AUTH = 'raed_auth_status_v1';
+const KEY_OPERATIONS = 'raed_operations_data_v1';
+const KEY_SUPPLIERS = 'raed_suppliers_data_v1';
+const KEY_INVENTORY = 'raed_inventory_data_v1';
+
+// قائمة المواقع والمشاريع المعتمدة في شيت الإكسيل
+const RAED_SITES = [
+  "باتيو كازا",
+  "المعادي فيو",
+  "كليوباترا",
+  "فيلات الباتيو",
+  "ليك فيو",
+  "جراندا",
+  "فيفينز",
+  "الحلواني",
+  "فيلات كازا",
+  "عملاء التشوينة",
+  "المقاولون العرب",
+  "المعادي 2"
+];
+
+// قائمة أصناف التشوينة ومواد البناء الأساسية
+const RAED_ITEMS = [
+  "رمل",
+  "سن",
+  "أسمنت سيناء",
+  "أسمنت طرة",
+  "أسمنت واحة",
+  "أسمنت أبيض",
+  "جبس قومية",
+  "جبس سيناء",
+  "طوب أحمر",
+  "طوب 24",
+  "طوب آلي",
+  "طوب دوبل"
+];
+
+// قائمة الموردين المعتمدة في الشيت
+const RAED_DEFAULT_SUPPLIERS = [
+  { id: 'SUP-1', name: 'الشيخ فوزي', item: 'أسمنت', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-2', name: 'تشوينة ناصر', item: 'تشوينات ومواد', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-3', name: 'الشيخ عاطف', item: 'أسمنت وجبس', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-4', name: 'محمود حميدة', item: 'رمل وسن', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-5', name: 'أحمد حنفي', item: 'أسمنت', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-6', name: 'صبري طوب', item: 'طوب أحمر وآلي', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-7', name: 'سليمان مورد', item: 'رمل', totalWork: 0, totalPaid: 0 },
+  { id: 'SUP-8', name: 'مورد السن', item: 'سن بأنواعه', totalWork: 0, totalPaid: 0 }
+];
+
+// =================== بدء التشغيل ===================
+window.addEventListener('DOMContentLoaded', () => {
+  checkLogin();
+  initDefaults();
+  populateDropdowns();
+  refreshAllData();
+});
+
+function checkLogin() {
+  const isAuth = localStorage.getItem(KEY_AUTH);
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay) overlay.style.display = (isAuth === 'true') ? 'none' : 'flex';
+}
+
+function handleLogin() {
+  const user = document.getElementById('loginUser').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPass').value.trim();
+
+  if ((user === 'admin' || user === '') && (pass === '1234' || pass === '0000')) {
+    localStorage.setItem(KEY_AUTH, 'true');
+    checkLogin();
+    Swal.fire({ icon: 'success', title: 'مرحباً بك في شركة الرائد', timer: 1200, showConfirmButton: false });
+  } else {
+    Swal.fire({ icon: 'error', title: 'خطأ', text: 'اسم المستخدم أو كلمة المرور غير صحيحة!' });
+  }
+}
+
+function handleLogout() {
+  if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+    localStorage.removeItem(KEY_AUTH);
+    checkLogin();
+  }
+}
+
+// تهيئة البيانات الافتراضية إذا كان السيستم يفتح لأول مرة
+function initDefaults() {
+  if (!localStorage.getItem(KEY_SUPPLIERS)) {
+    localStorage.setItem(KEY_SUPPLIERS, JSON.stringify(RAED_DEFAULT_SUPPLIERS));
+  }
+  if (!localStorage.getItem(KEY_INVENTORY)) {
+    const defaultInv = {};
+    RAED_ITEMS.forEach(it => defaultInv[it] = 0);
+    localStorage.setItem(KEY_INVENTORY, JSON.stringify(defaultInv));
+  }
+}
+
+function populateDropdowns() {
+  const siteSelect = document.getElementById('opSiteName');
+  const filterSelect = document.getElementById('filterSiteSelect');
+  const itemSelect = document.getElementById('opItemName');
+
+  if (siteSelect) {
+    siteSelect.innerHTML = RAED_SITES.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  if (filterSelect) {
+    filterSelect.innerHTML = '<option value="all">كل المواقع</option>' + RAED_SITES.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  if (itemSelect) {
+    itemSelect.innerHTML = RAED_ITEMS.map(i => `<option value="${i}">${i}</option>`).join('');
+  }
+}
+
+// تبديل الشاشات
+function switchView(viewId) {
+  ['dashboard', 'sites', 'suppliers', 'inventory'].forEach(v => {
+    const sec = document.getElementById(`view-${v}`);
+    if (sec) sec.classList.add('hidden');
+    const btn = document.getElementById(`nav-${v}`);
+    if (btn) btn.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition';
+  });
+
+  const activeSec = document.getElementById(`view-${viewId}`);
+  if (activeSec) activeSec.classList.remove('hidden');
+
+  const activeBtn = document.getElementById(`nav-${viewId}`);
+  if (activeBtn) activeBtn.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30';
+
+  refreshAllData();
+}
+
+// =================== جلب وحفظ البيانات ===================
+function getOperations() {
+  return JSON.parse(localStorage.getItem(KEY_OPERATIONS) || '[]');
+}
+function saveOperations(data) {
+  localStorage.setItem(KEY_OPERATIONS, JSON.stringify(data));
+}
+
+function getSuppliers() {
+  return JSON.parse(localStorage.getItem(KEY_SUPPLIERS) || '[]');
+}
+function saveSuppliers(data) {
+  localStorage.setItem(KEY_SUPPLIERS, JSON.stringify(data));
+}
+
+function getInventory() {
+  return JSON.parse(localStorage.getItem(KEY_INVENTORY) || '{}');
+}
+function saveInventory(data) {
+  localStorage.setItem(KEY_INVENTORY, JSON.stringify(data));
+}
+
+// =================== الحسابات المركزية والتحديث ===================
+function refreshAllData() {
+  const operations = getOperations();
+  const suppliers = getSuppliers();
+  const inventory = getInventory();
+
+  let totalWork = 0;
+  let totalTashween = 0;
+  let totalWorkers = 0;
+  let totalCollected = 0;
+
+  // خريطة إجماليات كل موقع
+  const siteSummaryMap = {};
+  RAED_SITES.forEach(s => {
+    siteSummaryMap[s] = { work: 0, tashween: 0, workers: 0, collected: 0, count: 0 };
+  });
+
+  operations.forEach(op => {
+    const w = parseFloat(op.workTotal) || 0;
+    const t = parseFloat(op.tashweenTotal) || 0;
+    const wr = parseFloat(op.workersTotal) || 0;
+    const c = parseFloat(op.collected) || 0;
+
+    totalWork += w;
+    totalTashween += t;
+    totalWorkers += wr;
+    totalCollected += c;
+
+    if (siteSummaryMap[op.siteName]) {
+      siteSummaryMap[op.siteName].work += w;
+      siteSummaryMap[op.siteName].tashween += t;
+      siteSummaryMap[op.siteName].workers += wr;
+      siteSummaryMap[op.siteName].collected += c;
+      siteSummaryMap[op.siteName].count += 1;
+    }
+  });
+
+  // معادلة الشيت: إجمالي المطلوب = (الشغل + التشوين) - المحصل
+  const totalRemainingOutside = (totalWork + totalTashween) - totalCollected;
+
+  // إجمالي ديون الموردين
+  let totalSuppliersDebt = 0;
+  suppliers.forEach(s => totalSuppliersDebt += Math.max(0, (s.totalWork || 0) - (s.totalPaid || 0)));
+
+  // تحديث كروت الرئيسية
+  document.getElementById('dashTotalWork').innerText = `${totalWork.toLocaleString()} ج.م`;
+  document.getElementById('dashTotalTashween').innerText = `${totalTashween.toLocaleString()} ج.م`;
+  document.getElementById('dashTotalCollected').innerText = `${totalCollected.toLocaleString()} ج.م`;
+  document.getElementById('dashTotalRemainingOutside').innerText = `${totalRemainingOutside.toLocaleString()} ج.م`;
+  document.getElementById('dashSuppliersTotalRemaining').innerText = `${totalSuppliersDebt.toLocaleString()} ج.م`;
+  document.getElementById('dashTotalWorkers').innerText = `${totalWorkers.toLocaleString()} ج.م`;
+
+  // جدول ملخص المواقع في الرئيسية
+  const dashSitesTbody = document.getElementById('dashboardSitesSummaryBody');
+  if (dashSitesTbody) {
+    dashSitesTbody.innerHTML = RAED_SITES.map(site => {
+      const data = siteSummaryMap[site];
+      const remaining = (data.work + data.tashween) - data.collected;
+      return `
+        <tr class="hover:bg-slate-800/50">
+          <td class="p-2.5 font-bold text-white">${site} <span class="text-[10px] text-slate-500 font-normal">(${data.count} عملية)</span></td>
+          <td class="p-2.5">${data.work.toLocaleString()} ج</td>
+          <td class="p-2.5 text-blue-400">${data.tashween.toLocaleString()} ج</td>
+          <td class="p-2.5 text-purple-400">${data.workers.toLocaleString()} ج</td>
+          <td class="p-2.5 text-emerald-400 font-bold">${data.collected.toLocaleString()} ج</td>
+          <td class="p-2.5 font-black ${remaining > 0 ? 'text-rose-400' : 'text-slate-400'}">${remaining.toLocaleString()} ج.م</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  renderSitesTable();
+  renderSuppliersView();
+  renderInventoryView();
+}
+
+// =================== جدول العمليات والمواقع ===================
+function renderSitesTable() {
+  const operations = getOperations();
+  const filter = document.getElementById('filterSiteSelect')?.value || 'all';
+  const tbody = document.getElementById('sitesOperationsTableBody');
+  if (!tbody) return;
+
+  const filtered = (filter === 'all') ? operations : operations.filter(op => op.siteName === filter);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="p-6 text-center text-slate-500">لا توجد عمليات مسجلة لهذا الموقع.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((op, idx) => {
+    const remaining = ((parseFloat(op.workTotal) || 0) + (parseFloat(op.tashweenTotal) || 0)) - (parseFloat(op.collected) || 0);
+    return `
+      <tr class="hover:bg-slate-800/50">
+        <td class="p-2.5 text-slate-400 font-mono text-[11px]">${op.date}</td>
+        <td class="p-2.5 font-bold text-white">${op.siteName}</td>
+        <td class="p-2.5 text-amber-400">${op.itemName}</td>
+        <td class="p-2.5 text-center font-bold">${op.qty}</td>
+        <td class="p-2.5 font-bold">${(parseFloat(op.workTotal) || 0).toLocaleString()} ج</td>
+        <td class="p-2.5 text-blue-400">${(parseFloat(op.tashweenTotal) || 0).toLocaleString()} ج</td>
+        <td class="p-2.5 text-purple-400">${(parseFloat(op.workersTotal) || 0).toLocaleString()} ج</td>
+        <td class="p-2.5 text-emerald-400 font-bold">${(parseFloat(op.collected) || 0).toLocaleString()} ج</td>
+        <td class="p-2.5 font-black text-rose-400">${remaining.toLocaleString()} ج</td>
+        <td class="p-2.5 text-center">
+          <button onclick="deleteOperation(${idx})" class="text-rose-500 hover:text-rose-400"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openAddOperationModal() {
+  document.getElementById('opWorkTotal').value = '';
+  document.getElementById('opTashweenTotal').value = '';
+  document.getElementById('opWorkersTotal').value = '';
+  document.getElementById('opCollected').value = '';
+  document.getElementById('opQty').value = 1;
+  document.getElementById('operationModal').classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function saveOperation() {
+  const siteName = document.getElementById('opSiteName').value;
+  const itemName = document.getElementById('opItemName').value;
+  const qty = parseInt(document.getElementById('opQty').value) || 1;
+  const workTotal = parseFloat(document.getElementById('opWorkTotal').value) || 0;
+  const tashweenTotal = parseFloat(document.getElementById('opTashweenTotal').value) || 0;
+  const workersTotal = parseFloat(document.getElementById('opWorkersTotal').value) || 0;
+  const collected = parseFloat(document.getElementById('opCollected').value) || 0;
+
+  if (workTotal <= 0 && tashweenTotal <= 0) {
+    alert('يرجى كتابة قيمة إجمالي الشغل أو التشوين!');
+    return;
+  }
+
+  const dt = new Date().toISOString().split('T')[0];
+  const operations = getOperations();
+  operations.unshift({
+    id: 'OP-' + Date.now(),
+    date: dt,
+    siteName,
+    itemName,
+    qty,
+    workTotal,
+    tashweenTotal,
+    workersTotal,
+    collected
+  });
+
+  saveOperations(operations);
+
+  // خصم الكمية من رصيد التشوينة بالمخزن
+  const inv = getInventory();
+  if (inv[itemName] !== undefined) {
+    inv[itemName] = Math.max(0, inv[itemName] - qty);
+    saveInventory(inv);
+  }
+
+  closeModal('operationModal');
+  refreshAllData();
+  Swal.fire({ icon: 'success', title: `تم تسجيل العملية لموقع (${siteName}) بنجاح`, timer: 1500, showConfirmButton: false });
+}
+
+function deleteOperation(idx) {
+  if (confirm('هل أنت متأكد من حذف هذه العملية؟')) {
+    const operations = getOperations();
+    operations.splice(idx, 1);
+    saveOperations(operations);
+    refreshAllData();
+  }
+}
+
+// =================== كروت الموردين ===================
+function renderSuppliersView() {
+  const container = document.getElementById('suppliersCardsContainer');
+  if (!container) return;
+  const suppliers = getSuppliers();
+
+  container.innerHTML = suppliers.map((sup, idx) => {
+    const remaining = (sup.totalWork || 0) - (sup.totalPaid || 0);
+    return `
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-sm font-black text-white">${sup.name}</h3>
+            <span class="text-[11px] text-amber-400">${sup.item}</span>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-lg font-bold ${remaining > 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}">
+            ${remaining > 0 ? `متبقي له: ${remaining.toLocaleString()} ج` : 'حسابه خالص ✔'}
+          </span>
+        </div>
+
+        <div class="space-y-1 text-xs text-slate-400">
+          <div class="flex justify-between"><span>إجمالي التوريد:</span><b class="text-white">${(sup.totalWork || 0).toLocaleString()} ج</b></div>
+          <div class="flex justify-between"><span>المسدد له:</span><b class="text-emerald-400">${(sup.totalPaid || 0).toLocaleString()} ج</b></div>
+        </div>
+
+        <div class="flex gap-2 pt-2 border-t border-slate-800">
+          <button onclick="recordSupplierBill(${idx})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition">+ توريدة</button>
+          <button onclick="paySupplier(${idx})" class="flex-1 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 text-xs font-bold rounded-xl transition">سداد دفعة</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function recordSupplierBill(idx) {
+  const suppliers = getSuppliers();
+  const amt = prompt(`أدخل قيمة التوريدة الجديدة من المورد (${suppliers[idx].name}):`);
+  if (amt && !isNaN(amt) && parseFloat(amt) > 0) {
+    suppliers[idx].totalWork = (suppliers[idx].totalWork || 0) + parseFloat(amt);
+    saveSuppliers(suppliers);
+    refreshAllData();
+  }
+}
+
+function paySupplier(idx) {
+  const suppliers = getSuppliers();
+  const amt = prompt(`أدخل المبلغ المسدد للمورد (${suppliers[idx].name}):`);
+  if (amt && !isNaN(amt) && parseFloat(amt) > 0) {
+    suppliers[idx].totalPaid = (suppliers[idx].totalPaid || 0) + parseFloat(amt);
+    saveSuppliers(suppliers);
+    refreshAllData();
+  }
+}
+
+function openAddSupplierTransactionModal() {
+  const suppliers = getSuppliers();
+  const supOptions = suppliers.map((s, i) => `<option value="${i}">${s.name} (${s.item})</option>`).join('');
+
+  Swal.fire({
+    title: 'تسجيل توريدة من مورد',
+    html: `
+      <select id="swal-sup-idx" class="swal2-input">${supOptions}</select>
+      <input id="swal-sup-amount" type="number" class="swal2-input" placeholder="قيمة التوريدة (ج.م)">
+      <input id="swal-sup-paid" type="number" class="swal2-input" placeholder="المدفوع كاش له فوراً (ج.م)">
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'تسجيل',
+    cancelButtonText: 'إلغاء',
+    preConfirm: () => {
+      const idx = document.getElementById('swal-sup-idx').value;
+      const amt = parseFloat(document.getElementById('swal-sup-amount').value) || 0;
+      const paid = parseFloat(document.getElementById('swal-sup-paid').value) || 0;
+      if (amt <= 0) Swal.showValidationMessage('يرجى إدخال قيمة التوريدة');
+      return { idx, amt, paid };
+    }
+  }).then(res => {
+    if (res.isConfirmed) {
+      suppliers[res.value.idx].totalWork = (suppliers[res.value.idx].totalWork || 0) + res.value.amt;
+      suppliers[res.value.idx].totalPaid = (suppliers[res.value.idx].totalPaid || 0) + res.value.paid;
+      saveSuppliers(suppliers);
+      refreshAllData();
+      Swal.fire({ icon: 'success', title: 'تم تسجيل التوريدة بنجاح', timer: 1200, showConfirmButton: false });
+    }
+  });
+}
+
+// =================== جرد التشوينة والمخزن ===================
+function renderInventoryView() {
+  const container = document.getElementById('inventoryCardsContainer');
+  if (!container) return;
+  const inventory = getInventory();
+
+  container.innerHTML = RAED_ITEMS.map(item => {
+    const qty = inventory[item] || 0;
+    return `
+      <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex justify-between items-center">
+        <div>
+          <b class="text-xs text-white block">${item}</b>
+          <span class="text-[10px] text-slate-500">الرصيد بالتشوينة</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <b class="text-base font-black text-amber-400 font-mono">${qty}</b>
+          <button onclick="updateStock('${item}')" class="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"><i class="fa-solid fa-pen"></i></button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateStock(item) {
+  const inv = getInventory();
+  const current = inv[item] || 0;
+  const val = prompt(`تعديل رصيد صنف (${item}) بالمخزن:`, current);
+  if (val !== null && !isNaN(val)) {
+    inv[item] = parseInt(val) || 0;
+    saveInventory(inv);
+    renderInventoryView();
+  }
+}
+
+// =================== تصدير إكسيل متطابق مع شيت الرائد ===================
+function exportRaedExcel() {
+  const operations = getOperations();
+  const suppliers = getSuppliers();
+
+  // الشيت 1: حركة المواقع والتشوينات
+  const opsData = operations.map(o => ({
+    "التاريخ": o.date,
+    "الموقع / المشروع": o.siteName,
+    "الصنف": o.itemName,
+    "الكمية": o.qty,
+    "إجمالي الشغل": o.workTotal,
+    "إجمالي التشوين": o.tashweenTotal,
+    "إجمالي العمالة": o.workersTotal,
+    "إجمالي التحصيل": o.collected,
+    "المتبقي خارجاً": (o.workTotal + o.tashweenTotal) - o.collected
+  }));
+
+  // الشيت 2: كشوف حسابات الموردين
+  const supData = suppliers.map(s => ({
+    "اسم المورد": s.name,
+    "الصنف المورد": s.item,
+    "إجمالي الشغل والتوريد": s.totalWork,
+    "المسدد له": s.totalPaid,
+    "المتبقي له (دين)": Math.max(0, s.totalWork - s.totalPaid)
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const wsOps = XLSX.utils.json_to_sheet(opsData);
+  const wsSup = XLSX.utils.json_to_sheet(supData);
+
+  XLSX.utils.book_append_sheet(wb, wsOps, "حسابات المواقع");
+  XLSX.utils.book_append_sheet(wb, wsSup, "حسابات الموردين");
+
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `شركة_الرائد_لتشوينات_مواد_البناء_${today}.xlsx`);
+}
